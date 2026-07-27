@@ -5,7 +5,7 @@
     "description": "Leaderphabrix LPX500 & Phabrix Qx/ QxL/ QxP preset loader",
     "version": "1.0.0",
     "license": "MIT",
-    "repository": "https://github.com/leader-europe/companion-module-leaderphabrix-lpx-qx",
+    "repository": "https://github.com/bitfocus/companion-module-leaderphabrix-lpx-qx",
     "bugs": "",
     "maintainers": [{
             "name": "ed smith",
