@@ -1,7 +1,7 @@
 // Company: Leader Electronics of Europe
 // License: MIT
 // Created by: Ed Smith 
-// Date: 13/05/2026
+// Date: 17/08/2026
 // Load, create and delete user presets on LeaderPhabrix LPX500 waveform monitor 
 // or Phabrix Qx/L/P using Companion/ streamdeck buttons. 
 // Requires Rest API to be enabled on device and to be connected to same network as Companion
@@ -52,6 +52,7 @@ export class DynamicLoaderInstance extends InstanceBase<ModuleConfig> {
   private lastFingerprint = ''
 
   private deleteHoldTimer: NodeJS.Timeout | null = null
+  private deleteHoldInterval: NodeJS.Timeout | null = null
   private deleteHoldStart: number | null = null
   private readonly DELETE_HOLD_MS = 5000
 
@@ -81,7 +82,8 @@ export class DynamicLoaderInstance extends InstanceBase<ModuleConfig> {
       { variableId: 'last_deleted_preset', name: 'Last deleted preset name' },
       { variableId: 'delete_hold_countdown', name: 'Delete hold countdown text' },
 
-      // ---- About variables from LPX500 device ----
+      // ---- About variables from LPX500/ Qx/L/P device ----
+      // Serial number is only available on LPX500 units (at time of writing)
       { variableId: 'currentFirmwareMode', name: 'Current Firmware Mode' },
       { variableId: 'currentSystemMode', name: 'Current System Mode' },
       { variableId: 'device', name: 'Device' },
@@ -93,63 +95,6 @@ export class DynamicLoaderInstance extends InstanceBase<ModuleConfig> {
       { variableId: 'timeOnUnit', name: 'Time On Unit' },
       { variableId: 'serialNumber', name: 'Serial Number' },
 
-      /*
-      { variableId: 'jitterAdcSpan', name: 'Jitter ADC Span' },
-      { variableId: 'sha', name: 'SHA' },
-      
-      { variableId: 'toolchainVersion', name: 'Tool Chain Version' },
-      { variableId: 'sdiIoBoardRevision', name: 'SDI IO Board Revision' },
-      { variableId: 'sdiIoBoardEcn', name: 'SDI IO ECN' },
-      { variableId: 'miscellaneousIoBoardRevision', name: 'Misc IO Board Revision' },
-      { variableId: 'miscellaneousIoBoardEcn', name: 'Misc IO Board ECN' },
-      { variableId: 'fpgaBoardRevision', name: 'FPGA Board Revision' },
-      { variableId: 'fpgaBoardEcn', name: 'FPGA Board ECN' },
-      { variableId: 'cpuCarrierBoardRevision', name: 'CPU Board Revision' },
-      { variableId: 'cpuCarrierBoardEcn', name: 'CPU Board ECN' },
-      { variableId: 'backplaneBoardRevision', name: 'Backplane Board Revision' },
-      { variableId: 'backplaneBoardEcn', name: 'Backplane Board ECN' },
-      
-      // Driver Gains...
-      { variableId: 'driver_a_gain_1_5g', name: 'Driver A Gain 1.5G' },
-      { variableId: 'driver_a_gain_3g', name: 'Driver A Gain 3G' },
-      { variableId: 'driver_a_gain_6g', name: 'Driver A Gain 6G' },
-      { variableId: 'driver_a_gain_12g', name: 'Driver A Gain 12G' },
-
-      { variableId: 'driver_b_gain_1_5g', name: 'Driver B Gain 1.5G' },
-      { variableId: 'driver_b_gain_3g', name: 'Driver B Gain 3G' },
-      { variableId: 'driver_b_gain_6g', name: 'Driver B Gain 6G' },
-      { variableId: 'driver_b_gain_12g', name: 'Driver B Gain 12G' },
-
-      { variableId: 'driver_c_gain_1_5g', name: 'Driver C Gain 1.5G' },
-      { variableId: 'driver_c_gain_3g', name: 'Driver C Gain 3G' },
-      { variableId: 'driver_c_gain_6g', name: 'Driver C Gain 6G' },
-      { variableId: 'driver_c_gain_12g', name: 'Driver C Gain 12G' },
-
-      { variableId: 'driver_d_gain_1_5g', name: 'Driver D Gain 1.5G' },
-      { variableId: 'driver_d_gain_3g', name: 'Driver D Gain 3G' },
-      { variableId: 'driver_d_gain_6g', name: 'Driver D Gain 6G' },
-      { variableId: 'driver_d_gain_12g', name: 'Driver D Gain 12G' },
-
-      { variableId: 'calibrationDateUtc', name: 'Calibration Date UTC' },
-
-      // EYE variables...
-      { variableId: 'eye_dcGain', name: 'Eye DC Gain' },
-      { variableId: 'eye_gain', name: 'Eye Gain' },
-      { variableId: 'eye_offset', name: 'Eye Offset' },
-      { variableId: 'eye_eyeCalRevision', name: 'Eye Calibration Revision' },
-
-      { variableId: 'eye_display_gain_270m', name: 'Eye Display Gain 270M' },
-      { variableId: 'eye_display_gain_1_5g', name: 'Eye Display Gain 1.5G' },
-      { variableId: 'eye_display_gain_3g', name: 'Eye Display Gain 3G' },
-      { variableId: 'eye_display_gain_6g', name: 'Eye Display Gain 6G' },
-      { variableId: 'eye_display_gain_12g', name: 'Eye Display Gain 12G' },
-
-      { variableId: 'eye_measure_gain_270m', name: 'Eye Measurement Gain 270M' },
-      { variableId: 'eye_measure_gain_1_5g', name: 'Eye Measurement Gain 1.5G' },
-      { variableId: 'eye_measure_gain_3g', name: 'Eye Measurement Gain 3G' },
-      { variableId: 'eye_measure_gain_6g', name: 'Eye Measurement Gain 6G' },
-      { variableId: 'eye_measure_gain_12g', name: 'Eye Measurement Gain 12G' },
-      */
     ])
 
     // Initial variable state
@@ -170,6 +115,8 @@ export class DynamicLoaderInstance extends InstanceBase<ModuleConfig> {
   // ---------------------------------------
   async destroy(): Promise<void> {
     this.stopPolling()
+    
+    this.clearDeleteHold()
 
     if (this.clearCreatedNameTimer) {
       clearTimeout(this.clearCreatedNameTimer)
@@ -324,7 +271,7 @@ export class DynamicLoaderInstance extends InstanceBase<ModuleConfig> {
       }))
   }
 
-// ---------------------------------------
+  // ---------------------------------------
   // ACTIONS
   // ---------------------------------------
   private buildActions(): CompanionActionDefinitions {
@@ -392,6 +339,9 @@ export class DynamicLoaderInstance extends InstanceBase<ModuleConfig> {
         description: 'Starts the timed hold-to-delete sequence',
         options: [],
         callback: async () => {
+        
+          this.clearDeleteHold()
+            
           this.deleteHoldStart = Date.now()
 
           const lastLoaded = String(this.getVariableValue('last_loaded_preset') ?? '')
@@ -401,15 +351,20 @@ export class DynamicLoaderInstance extends InstanceBase<ModuleConfig> {
 
           this.deleteHoldTimer = setTimeout(async () => {
             await this.deletePreset()
+            this.clearDeleteHold()
             this.checkFeedbacks('delete_hold_feedback')
             this.deleteHoldStart = null
             this.deleteHoldTimer = null
           }, this.DELETE_HOLD_MS)
 
           // Update countdown every 250ms
-          const interval = setInterval(() => {
+          this.deleteHoldInterval = setInterval(() => {
             if (!this.deleteHoldStart) {
-              clearInterval(interval)
+              if (this.deleteHoldInterval) {
+                  clearInterval(this.deleteHoldInterval)
+                  this.deleteHoldInterval = null
+                }
+              this.deleteHoldInterval = null
               return
             }
 
@@ -422,7 +377,11 @@ export class DynamicLoaderInstance extends InstanceBase<ModuleConfig> {
             })
 
             if (remain <= 0) {
-              clearInterval(interval)
+              if (this.deleteHoldInterval) {
+                  clearInterval(this.deleteHoldInterval)
+                  this.deleteHoldInterval = null
+                }
+              this.deleteHoldInterval = null
               this.setVariableValues({ delete_hold_countdown: 'Delete Preset' })
             }
           }, 250)
@@ -435,10 +394,7 @@ export class DynamicLoaderInstance extends InstanceBase<ModuleConfig> {
         description: 'Cancels delete if user releases early',
         options: [],
         callback: async () => {
-          if (this.deleteHoldTimer) clearTimeout(this.deleteHoldTimer)
-          this.deleteHoldTimer = null
-          this.deleteHoldStart = null
-
+          this.clearDeleteHold()
           this.setVariableValues({ delete_hold_countdown: 'Delete Preset' })
           this.checkFeedbacks('delete_hold_feedback')
         },
@@ -581,7 +537,7 @@ export class DynamicLoaderInstance extends InstanceBase<ModuleConfig> {
     }
   }
   
-// ---------------------------------------
+  // ---------------------------------------
   // GET ABOUT (populate module variables)
   // ---------------------------------------
   private async getAbout(): Promise<void> {
@@ -600,7 +556,6 @@ export class DynamicLoaderInstance extends InstanceBase<ModuleConfig> {
       }
 
       const json = await res.json() as any
-      //const getGain = (obj: any, field: string) => String(obj?.[field] ?? '')
 
       const values: Record<string, any> = {
         currentFirmwareMode: String(json.currentFirmwareMode ?? ''),
@@ -613,63 +568,6 @@ export class DynamicLoaderInstance extends InstanceBase<ModuleConfig> {
         softwareNumber: String(json.softwareNumber ?? ''),
         timeOnUnit: String(json.timeOnUnit ?? ''),
         serialNumber: String(json.serialNumber ?? ''),
-        
-        /*
-        
-        sha: String(json.sha ?? ''),
-        jitterAdcSpan: String(json.jitterAdcSpan ?? ''),
-        
-        toolchainVersion: String(json.toolchainVersion ?? ''),
-        sdiIoBoardRevision: String(json.sdiIoBoardRevision ?? ''),
-        sdiIoBoardEcn: String(json.sdiIoBoardEcn ?? ''),
-        miscellaneousIoBoardRevision: String(json.miscellaneousIoBoardRevision ?? ''),
-        miscellaneousIoBoardEcn: String(json.miscellaneousIoBoardEcn ?? ''),
-        fpgaBoardRevision: String(json.fpgaBoardRevision ?? ''),
-        fpgaBoardEcn: String(json.fpgaBoardEcn ?? ''),
-        cpuCarrierBoardRevision: String(json.cpuCarrierBoardRevision ?? ''),
-        cpuCarrierBoardEcn: String(json.cpuCarrierBoardEcn ?? ''),
-        backplaneBoardRevision: String(json.backplaneBoardRevision ?? ''),
-        backplaneBoardEcn: String(json.backplaneBoardEcn ?? ''),
-
-        driver_a_gain_1_5g: String(json.driver?.A?.['gain_1.5G'] ?? ''),
-        driver_a_gain_3g: String(json.driver?.A?.['gain_3G'] ?? ''),
-        driver_a_gain_6g: String(json.driver?.A?.['gain_6G'] ?? ''),
-        driver_a_gain_12g: String(json.driver?.A?.['gain_12G'] ?? ''),
-
-        driver_b_gain_1_5g: String(json.driver?.B?.['gain_1.5G'] ?? ''),
-        driver_b_gain_3g: String(json.driver?.B?.['gain_3G'] ?? ''),
-        driver_b_gain_6g: String(json.driver?.B?.['gain_6G'] ?? ''),
-        driver_b_gain_12g: String(json.driver?.B?.['gain_12G'] ?? ''),
-
-        driver_c_gain_1_5g: String(json.driver?.C?.['gain_1.5G'] ?? ''),
-        driver_c_gain_3g: String(json.driver?.C?.['gain_3G'] ?? ''),
-        driver_c_gain_6g: String(json.driver?.C?.['gain_6G'] ?? ''),
-        driver_c_gain_12g: String(json.driver?.C?.['gain_12G'] ?? ''),
-
-        driver_d_gain_1_5g: String(json.driver?.D?.['gain_1.5G'] ?? ''),
-        driver_d_gain_3g: String(json.driver?.D?.['gain_3G'] ?? ''),
-        driver_d_gain_6g: String(json.driver?.D?.['gain_6G'] ?? ''),
-        driver_d_gain_12g: String(json.driver?.D?.['gain_12G'] ?? ''),
-
-        calibrationDateUtc: String(json.driver?.['calibrationDateUtc'] ?? ''),
-
-        eye_dcGain: String(json.eye?.dcGain ?? ''),
-        eye_gain: String(json.eye?.gain ?? ''),
-        eye_offset: String(json.eye?.offset ?? ''),
-        eye_eyeCalRevision: String(json.eye?.eyeCalRevision ?? ''),
-
-        eye_display_gain_270m: getGain(json.eye?.displayGains, 'gain_270M'),
-        eye_display_gain_1_5g: getGain(json.eye?.displayGains, 'gain_1.5G'),
-        eye_display_gain_3g: getGain(json.eye?.displayGains, 'gain_3G'),
-        eye_display_gain_6g: getGain(json.eye?.displayGains, 'gain_6G'),
-        eye_display_gain_12g: getGain(json.eye?.displayGains, 'gain_12G'),
-
-        eye_measure_gain_270m: getGain(json.eye?.measurementGains, 'gain_270M'),
-        eye_measure_gain_1_5g: getGain(json.eye?.measurementGains, 'gain_1.5G'),
-        eye_measure_gain_3g: getGain(json.eye?.measurementGains, 'gain_3G'),
-        eye_measure_gain_6g: getGain(json.eye?.measurementGains, 'gain_6G'),
-        eye_measure_gain_12g: getGain(json.eye?.measurementGains, 'gain_12G'),
-        */
       }
 
       this.setVariableValues(values)
@@ -893,7 +791,26 @@ export class DynamicLoaderInstance extends InstanceBase<ModuleConfig> {
     return defs
   }
 
+  //----------------------------------------
+  // Clear Delete Hold timers HELPER
   // ---------------------------------------
+  private clearDeleteHold(): void {
+  console.log("clear timers")
+  if (this.deleteHoldTimer) {
+    clearTimeout(this.deleteHoldTimer)
+    this.deleteHoldTimer = null
+    console.log("clear deleteHoldTimer")
+  }
+
+  if (this.deleteHoldInterval) {
+    clearInterval(this.deleteHoldInterval)
+    this.deleteHoldInterval = null
+    console.log("clear deleteHoldInterval")
+  }
+
+  this.deleteHoldStart = null
+}
+  //----------------------------------------
   // HEALTH HELPERS
   // ---------------------------------------
   private setPresetHealth(presetId: string, level: HealthLevel, message: string): void {
