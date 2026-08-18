@@ -795,17 +795,15 @@ export class DynamicLoaderInstance extends InstanceBase<ModuleConfig> {
   // Clear Delete Hold timers HELPER
   // ---------------------------------------
   private clearDeleteHold(): void {
-  console.log("clear timers")
+
   if (this.deleteHoldTimer) {
     clearTimeout(this.deleteHoldTimer)
     this.deleteHoldTimer = null
-    console.log("clear deleteHoldTimer")
   }
 
   if (this.deleteHoldInterval) {
     clearInterval(this.deleteHoldInterval)
     this.deleteHoldInterval = null
-    console.log("clear deleteHoldInterval")
   }
 
   this.deleteHoldStart = null
