@@ -795,22 +795,6 @@ export class DynamicLoaderInstance extends InstanceBase<ModuleConfig> {
   // Clear Delete Hold timers HELPER
   // ---------------------------------------
   private clearDeleteHold(): void {
-
-<<<<<<< HEAD
-    if (this.deleteHoldTimer) {
-      clearTimeout(this.deleteHoldTimer)
-      this.deleteHoldTimer = null
-    }
-
-    if (this.deleteHoldInterval) {
-      clearInterval(this.deleteHoldInterval)
-      this.deleteHoldInterval = null
-    }
-
-    this.deleteHoldStart = null
-}
-
-=======
   if (this.deleteHoldTimer) {
     clearTimeout(this.deleteHoldTimer)
     this.deleteHoldTimer = null
@@ -823,7 +807,6 @@ export class DynamicLoaderInstance extends InstanceBase<ModuleConfig> {
 
   this.deleteHoldStart = null
 }
->>>>>>> 1cfe15f46b4bff77ba96ff6f7f5ea9a0afb732c3
   //----------------------------------------
   // HEALTH HELPERS
   // ---------------------------------------
